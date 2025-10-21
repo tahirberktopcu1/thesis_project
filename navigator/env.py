@@ -313,11 +313,20 @@ class LinearNavigatorEnv(gym.Env):
         return base_obstacles + tuple(generated)
 
     def _move_forward(self) -> Tuple[bool, Optional[str]]:
-        dx = math.cos(self.agent_angle) * self.config.forward_speed
-        dy = math.sin(self.agent_angle) * self.config.forward_speed
+        max_step = self.config.forward_speed
+        boundary_room = self._distance_to_boundary(self.agent_angle) - self.config.corner_margin
+        obstacle_room = self._distance_to_obstacles(self.agent_angle) - (
+            self.config.agent_radius + self.config.corner_margin
+        )
+
+        available_distance = min(max_step, boundary_room, obstacle_room)
+        if available_distance <= 1e-3:
+            return False, "blocked"
+
+        step_ratio = max(0.0, min(1.0, available_distance / max_step))
+        dx = math.cos(self.agent_angle) * max_step * step_ratio
+        dy = math.sin(self.agent_angle) * max_step * step_ratio
         candidate = self.agent_pos + np.array([dx, dy], dtype=np.float32)
-        collision = False
-        collision_type: Optional[str] = None
 
         clamped_x = np.clip(
             candidate[0],
@@ -330,6 +339,8 @@ class LinearNavigatorEnv(gym.Env):
             self.config.map_height - self.config.agent_radius,
         )
 
+        collision = False
+        collision_type: Optional[str] = None
         if not (math.isclose(candidate[0], clamped_x) and math.isclose(candidate[1], clamped_y)):
             collision = True
             collision_type = "boundary"
@@ -338,7 +349,7 @@ class LinearNavigatorEnv(gym.Env):
         if self._collides_with_obstacle(new_pos):
             collision = True
             collision_type = "obstacle"
-            new_pos = self.agent_pos  # stay in place on obstacle collision
+            new_pos = self.agent_pos
 
         self.agent_pos = new_pos
         return collision, collision_type

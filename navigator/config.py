@@ -50,6 +50,7 @@ class NavigatorConfig:
     safety_penalty_gain: float = 0.2
     forward_block_threshold: float = 0.25
     turn_bonus_gain: float = 0.03
+    corner_margin: float = 10.0
     sensor_angles: Sequence[float] = field(
         default_factory=lambda: tuple(
             i * (2.0 * math.pi / 16.0) for i in range(16)
