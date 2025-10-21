@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .config import NavigatorConfig
+from .config import NavigatorConfig, RectangleObstacle
 from .renderer import NavigatorRenderer, RenderFrame
 
 
@@ -26,8 +26,15 @@ class LinearNavigatorEnv(gym.Env):
         self.render_mode = render_mode
 
         self.action_space = spaces.Discrete(3)  # forward, turn left, turn right
-        obs_low = np.full(8, -1.0, dtype=np.float32)
-        obs_high = np.ones(8, dtype=np.float32)
+        self._obstacles: Tuple[RectangleObstacle, ...] = self.config.resolved_obstacles()
+        self._sensor_count = len(self.config.sensor_angles)
+
+        base_low = np.array([-1.0, -1.0, -1.0, -1.0, 0.0], dtype=np.float32)
+        base_high = np.array([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+        sensor_low = np.zeros(self._sensor_count, dtype=np.float32)
+        sensor_high = np.ones(self._sensor_count, dtype=np.float32)
+        obs_low = np.concatenate([base_low, sensor_low])
+        obs_high = np.concatenate([base_high, sensor_high])
         self.observation_space = spaces.Box(obs_low, obs_high, dtype=np.float32)
 
         self.agent_pos = np.zeros(2, dtype=np.float32)
@@ -36,6 +43,7 @@ class LinearNavigatorEnv(gym.Env):
         self._step_count = 0
         self._renderer: Optional[NavigatorRenderer] = None
         self._max_goal_distance = math.hypot(self.config.map_width, self.config.map_height)
+        self._last_sensor_distances: Tuple[float, ...] = tuple(0.0 for _ in range(self._sensor_count))
 
         self.reset(seed=None)
 
@@ -47,6 +55,7 @@ class LinearNavigatorEnv(gym.Env):
         self.agent_pos = np.array(self.config.resolved_start(), dtype=np.float32)
         self.agent_angle = 0.0
         self.goal_pos = np.array(self.config.resolved_goal(), dtype=np.float32)
+        self._last_sensor_distances = self._sensor_distances()
 
         if self.render_mode == "human":
             self._ensure_renderer()
@@ -111,6 +120,7 @@ class LinearNavigatorEnv(gym.Env):
             agent_angle=self.agent_angle,
             goal_pos=tuple(self.goal_pos),
             sensor_rays=self._sensor_rays(),
+            obstacles=tuple(obstacle.as_bounds() for obstacle in self._obstacles),
         )
         if self.render_mode == "human":
             return None
@@ -142,6 +152,7 @@ class LinearNavigatorEnv(gym.Env):
         dx = math.cos(self.agent_angle) * self.config.forward_speed
         dy = math.sin(self.agent_angle) * self.config.forward_speed
         candidate = self.agent_pos + np.array([dx, dy], dtype=np.float32)
+        collision = False
 
         clamped_x = np.clip(
             candidate[0],
@@ -154,11 +165,23 @@ class LinearNavigatorEnv(gym.Env):
             self.config.map_height - self.config.agent_radius,
         )
 
-        collision = not (math.isclose(candidate[0], clamped_x) and math.isclose(candidate[1], clamped_y))
-        self.agent_pos = np.array([clamped_x, clamped_y], dtype=np.float32)
+        if not (math.isclose(candidate[0], clamped_x) and math.isclose(candidate[1], clamped_y)):
+            collision = True
+
+        new_pos = np.array([clamped_x, clamped_y], dtype=np.float32)
+        if self._collides_with_obstacle(new_pos):
+            collision = True
+            new_pos = self.agent_pos  # stay in place on obstacle collision
+
+        self.agent_pos = new_pos
         return collision
 
     def _get_observation(self) -> np.ndarray:
+        self._last_sensor_distances = self._sensor_distances()
+        sensor_readings = np.array(
+            [np.clip(dist / self.config.sensor_range, 0.0, 1.0) for dist in self._last_sensor_distances],
+            dtype=np.float32,
+        )
         normalized_pos = np.array(
             [
                 (self.agent_pos[0] / self.config.map_width) * 2.0 - 1.0,
@@ -173,25 +196,37 @@ class LinearNavigatorEnv(gym.Env):
             [np.clip(self._distance_to_goal() / self._max_goal_distance, 0.0, 1.0)],
             dtype=np.float32,
         )
-        sensors = np.array(self._sensor_readings(), dtype=np.float32)
-        observation = np.concatenate([normalized_pos, orientation, distance_norm, sensors])
+        observation = np.concatenate([normalized_pos, orientation, distance_norm, sensor_readings])
         return observation.astype(np.float32)
 
-    def _sensor_readings(self) -> Tuple[float, ...]:
-        readings = []
+    def _sensor_distances(self) -> Tuple[float, ...]:
+        distances = []
         for rel_angle in self.config.sensor_angles:
-            ray_angle = self.agent_angle + rel_angle
-            readings.append(self._distance_to_boundary(ray_angle) / self.config.sensor_range)
-        return tuple(np.clip(readings, 0.0, 1.0))
-
-    def _sensor_rays(self) -> Tuple[Tuple[Tuple[float, float], Tuple[float, float]], ...]:
-        rays = []
-        for rel_angle, reading in zip(self.config.sensor_angles, self._sensor_readings()):
             angle = self.agent_angle + rel_angle
-            length = reading * self.config.sensor_range
+            boundary_dist = self._distance_to_boundary(angle)
+            obstacle_dist = self._distance_to_obstacles(angle)
+            distances.append(min(boundary_dist, obstacle_dist, self.config.sensor_range))
+        return tuple(distances)
+
+    def _sensor_rays(
+        self,
+    ) -> Tuple[Tuple[Tuple[float, float], Tuple[float, float], float], ...]:
+        if not self._last_sensor_distances:
+            self._last_sensor_distances = self._sensor_distances()
+        rays = []
+        for rel_angle, distance in zip(self.config.sensor_angles, self._last_sensor_distances):
+            angle = self.agent_angle + rel_angle
+            length = min(distance, self.config.sensor_range)
             end_x = self.agent_pos[0] + math.cos(angle) * length
             end_y = self.agent_pos[1] + math.sin(angle) * length
-            rays.append(((self.agent_pos[0], self.agent_pos[1]), (end_x, end_y)))
+            normalized = np.clip(distance / self.config.sensor_range, 0.0, 1.0)
+            rays.append(
+                (
+                    (self.agent_pos[0], self.agent_pos[1]),
+                    (end_x, end_y),
+                    float(normalized),
+                )
+            )
         return tuple(rays)
 
     def _distance_to_boundary(self, angle: float) -> float:
@@ -219,6 +254,19 @@ class LinearNavigatorEnv(gym.Env):
             return self.config.sensor_range
         return float(min(min(distances), self.config.sensor_range))
 
+    def _distance_to_obstacles(self, angle: float) -> float:
+        dx = math.cos(angle)
+        dy = math.sin(angle)
+        if abs(dx) < 1e-6 and abs(dy) < 1e-6:
+            return self.config.sensor_range
+
+        min_distance = self.config.sensor_range
+        for obstacle in self._obstacles:
+            distance = self._ray_rectangle_intersection(self.agent_pos, (dx, dy), obstacle)
+            if distance is not None and 0.0 <= distance < min_distance:
+                min_distance = distance
+        return min_distance
+
     def _distance_to_goal(self) -> float:
         return float(np.linalg.norm(self.goal_pos - self.agent_pos))
 
@@ -229,3 +277,54 @@ class LinearNavigatorEnv(gym.Env):
         while angle <= -math.pi:
             angle += 2 * math.pi
         return angle
+
+    def _collides_with_obstacle(self, position: np.ndarray) -> bool:
+        radius = self.config.agent_radius
+        px, py = float(position[0]), float(position[1])
+        for obstacle in self._obstacles:
+            x_min, y_min, x_max, y_max = obstacle.as_bounds()
+            nearest_x = min(max(px, x_min), x_max)
+            nearest_y = min(max(py, y_min), y_max)
+            if (px - nearest_x) ** 2 + (py - nearest_y) ** 2 <= radius**2:
+                return True
+        return False
+
+    def _ray_rectangle_intersection(
+        self,
+        origin: Sequence[float],
+        direction: Sequence[float],
+        obstacle: RectangleObstacle,
+    ) -> Optional[float]:
+        x_min, y_min, x_max, y_max = obstacle.as_bounds()
+        ox, oy = origin
+        dx, dy = direction
+        t_min = 0.0
+        t_max = self.config.sensor_range
+
+        for origin_component, dir_component, min_bound, max_bound in (
+            (ox, dx, x_min, x_max),
+            (oy, dy, y_min, y_max),
+        ):
+            if abs(dir_component) < 1e-6:
+                if origin_component < min_bound or origin_component > max_bound:
+                    return None
+                continue
+
+            inv_dir = 1.0 / dir_component
+            t1 = (min_bound - origin_component) * inv_dir
+            t2 = (max_bound - origin_component) * inv_dir
+            t_near = min(t1, t2)
+            t_far = max(t1, t2)
+
+            if t_far < 0:
+                return None
+
+            t_min = max(t_min, t_near)
+            t_max = min(t_max, t_far)
+
+            if t_min > t_max:
+                return None
+
+        if t_min < 0.0:
+            return t_max if t_max >= 0.0 else None
+        return t_min

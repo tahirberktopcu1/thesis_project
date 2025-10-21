@@ -57,7 +57,8 @@ class NavigatorRenderer:
         agent_pos: Tuple[float, float],
         agent_angle: float,
         goal_pos: Tuple[float, float],
-        sensor_rays: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+        sensor_rays: Sequence[Tuple[Tuple[float, float], Tuple[float, float], float]],
+        obstacles: Sequence[Tuple[float, float, float, float]],
     ) -> Optional[RenderFrame]:
         self._handle_events()
         surface = self._surface
@@ -65,6 +66,7 @@ class NavigatorRenderer:
             return None
 
         surface.fill((24, 24, 32))
+        self._draw_obstacles(surface, obstacles)
         self._draw_goal(surface, goal_pos)
         self._draw_sensors(surface, sensor_rays)
         self._draw_agent(surface, agent_pos, agent_angle)
@@ -96,12 +98,12 @@ class NavigatorRenderer:
     def _draw_sensors(
         self,
         surface: "pygame.Surface",
-        rays: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+        rays: Sequence[Tuple[Tuple[float, float], Tuple[float, float], float]],
     ) -> None:
-        for start, end in rays:
+        for start, end, normalized in rays:
             pygame.draw.line(
                 surface,
-                (240, 200, 50),
+                self._sensor_color(normalized),
                 (int(start[0]), int(start[1])),
                 (int(end[0]), int(end[1])),
                 2,
@@ -130,6 +132,26 @@ class NavigatorRenderer:
             (255, 255, 255),
             [(int(tip[0]), int(tip[1])), (int(left[0]), int(left[1])), (int(right[0]), int(right[1]))],
         )
+
+    def _draw_obstacles(
+        self,
+        surface: "pygame.Surface",
+        obstacles: Sequence[Tuple[float, float, float, float]],
+    ) -> None:
+        for x_min, y_min, x_max, y_max in obstacles:
+            pygame.draw.rect(
+                surface,
+                (120, 80, 70),
+                pygame.Rect(int(x_min), int(y_min), int(x_max - x_min), int(y_max - y_min)),
+            )
+
+    @staticmethod
+    def _sensor_color(normalized: float) -> Tuple[int, int, int]:
+        normalized = max(0.0, min(1.0, normalized))
+        red = int(255 * (1.0 - normalized))
+        green = int(255 * normalized)
+        blue = 80
+        return red, green, blue
 
     def _handle_events(self) -> None:
         for event in pygame.event.get():

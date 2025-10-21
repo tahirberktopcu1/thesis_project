@@ -1,6 +1,6 @@
 # Linear Navigator PPO Project
 
-This project trains a forward-only agent that can rotate in place using PPO inside a custom Gymnasium (Gym) environment. A Pygame visualizer shows the agent, its sensors, and the goal in real time.
+This project trains a forward-only agent that can rotate in place using PPO inside a custom Gymnasium (Gym) environment. The arena now contains static rectangular obstacles and boundary walls; the agent must weave through them using 360° distance sensors. A Pygame visualizer shows the agent, its sensors (color coded by proximity), and the goal in real time.
 
 ## Setup
 
@@ -31,7 +31,7 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 ## Project Layout
 
 - `navigator/config.py`: Tunable parameters for the environment.
-- `navigator/env.py`: Gym environment, observations, and reward shaping.
-- `navigator/renderer.py`: Pygame renderer with arrow and sensor visuals.
+- `navigator/env.py`: Gym environment, observations, and reward shaping with obstacle collisions.
+- `navigator/renderer.py`: Pygame renderer (obstacles, arrow indicator, and sensor rays with distance-based colors).
 - `train.py`: PPO learner with evaluation callback setup.
 - `enjoy.py`: Playback script to watch the trained agent in human render mode.
