@@ -27,6 +27,7 @@ class NavigatorRenderer:
     agent_radius: int
     goal_radius: int
     render_mode: str
+    border_thickness: int = 4
 
     def __post_init__(self) -> None:
         pygame.init()
@@ -66,6 +67,7 @@ class NavigatorRenderer:
             return None
 
         surface.fill((24, 24, 32))
+        self._draw_border(surface)
         self._draw_obstacles(surface, obstacles)
         self._draw_goal(surface, goal_pos)
         self._draw_sensors(surface, sensor_rays)
@@ -144,6 +146,15 @@ class NavigatorRenderer:
                 (120, 80, 70),
                 pygame.Rect(int(x_min), int(y_min), int(x_max - x_min), int(y_max - y_min)),
             )
+
+    def _draw_border(self, surface: "pygame.Surface") -> None:
+        thickness = max(1, int(self.border_thickness))
+        pygame.draw.rect(
+            surface,
+            (200, 200, 210),
+            pygame.Rect(0, 0, self.width, self.height),
+            width=thickness,
+        )
 
     @staticmethod
     def _sensor_color(normalized: float) -> Tuple[int, int, int]:

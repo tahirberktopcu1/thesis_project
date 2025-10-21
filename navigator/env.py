@@ -29,8 +29,8 @@ class LinearNavigatorEnv(gym.Env):
         self._obstacles: Tuple[RectangleObstacle, ...] = self.config.resolved_obstacles()
         self._sensor_count = len(self.config.sensor_angles)
 
-        base_low = np.array([-1.0, -1.0, -1.0, -1.0, 0.0], dtype=np.float32)
-        base_high = np.array([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+        base_low = np.array([-1.0, -1.0, -1.0, -1.0, 0.0, -1.0, -1.0], dtype=np.float32)
+        base_high = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
         sensor_low = np.zeros(self._sensor_count, dtype=np.float32)
         sensor_high = np.ones(self._sensor_count, dtype=np.float32)
         obs_low = np.concatenate([base_low, sensor_low])
@@ -44,6 +44,7 @@ class LinearNavigatorEnv(gym.Env):
         self._renderer: Optional[NavigatorRenderer] = None
         self._max_goal_distance = math.hypot(self.config.map_width, self.config.map_height)
         self._last_sensor_distances: Tuple[float, ...] = tuple(0.0 for _ in range(self._sensor_count))
+        self._last_goal_direction = np.zeros(2, dtype=np.float32)
 
         self.reset(seed=None)
 
@@ -56,6 +57,7 @@ class LinearNavigatorEnv(gym.Env):
         self.agent_angle = 0.0
         self.goal_pos = np.array(self.config.resolved_goal(), dtype=np.float32)
         self._last_sensor_distances = self._sensor_distances()
+        self._last_goal_direction = self._goal_direction_vector().astype(np.float32)
 
         if self.render_mode == "human":
             self._ensure_renderer()
@@ -72,8 +74,9 @@ class LinearNavigatorEnv(gym.Env):
         prev_distance = self._distance_to_goal()
 
         collision = False
+        collision_type: Optional[str] = None
         if action == 0:  # move forward
-            collision = self._move_forward()
+            collision, collision_type = self._move_forward()
         elif action == 1:  # turn left
             self.agent_angle += self.config.turn_speed
         elif action == 2:  # turn right
@@ -85,17 +88,42 @@ class LinearNavigatorEnv(gym.Env):
         observation = self._get_observation()
         distance = self._distance_to_goal()
         distance_reward = (prev_distance - distance) * 0.1
-        reward = distance_reward - 0.01
+        step_penalty = 0.01 if action == 0 else 0.002
+        reward = distance_reward - step_penalty
 
-        if collision:
-            reward -= 0.1
+        orientation_vec = np.array(
+            [math.cos(self.agent_angle), math.sin(self.agent_angle)],
+            dtype=np.float32,
+        )
+        goal_dir = self._goal_direction_vector()
+        alignment = float(np.dot(orientation_vec, goal_dir))
+        reward += 0.05 * alignment
+
+        min_sensor_norm = float(
+            min(self._last_sensor_distances) / self.config.sensor_range
+            if self._last_sensor_distances
+            else 1.0
+        )
+        proximity_penalty = 1.0 - np.clip(min_sensor_norm, 0.0, 1.0)
+        reward -= 0.05 * (proximity_penalty**2)
+
+        terminated = False
+        truncated = False
+        reason: Optional[str] = None
 
         reached_goal = distance <= self.config.goal_radius
-        if reached_goal:
-            reward += 1.0
 
-        terminated = reached_goal
-        truncated = self._step_count >= self.config.max_episode_steps
+        if collision:
+            reward -= self.config.collision_penalty
+            terminated = True
+            reason = "collision"
+        elif reached_goal:
+            reward += 1.0
+            terminated = True
+            reason = "goal"
+        else:
+            truncated = self._step_count >= self.config.max_episode_steps
+            reason = "timeout" if truncated else None
 
         if self.render_mode == "human":
             self.render()
@@ -104,6 +132,10 @@ class LinearNavigatorEnv(gym.Env):
             "distance_to_goal": distance,
             "step_count": self._step_count,
             "collision": collision,
+            "collision_type": collision_type,
+            "terminated_reason": reason,
+            "goal_alignment": alignment,
+            "min_sensor_norm": min_sensor_norm,
         }
         return observation, float(reward), terminated, truncated, info
 
@@ -146,13 +178,15 @@ class LinearNavigatorEnv(gym.Env):
                 agent_radius=self.config.agent_radius,
                 goal_radius=self.config.goal_radius,
                 render_mode=self.render_mode,
+                border_thickness=self.config.border_thickness,
             )
 
-    def _move_forward(self) -> bool:
+    def _move_forward(self) -> Tuple[bool, Optional[str]]:
         dx = math.cos(self.agent_angle) * self.config.forward_speed
         dy = math.sin(self.agent_angle) * self.config.forward_speed
         candidate = self.agent_pos + np.array([dx, dy], dtype=np.float32)
         collision = False
+        collision_type: Optional[str] = None
 
         clamped_x = np.clip(
             candidate[0],
@@ -167,14 +201,16 @@ class LinearNavigatorEnv(gym.Env):
 
         if not (math.isclose(candidate[0], clamped_x) and math.isclose(candidate[1], clamped_y)):
             collision = True
+            collision_type = "boundary"
 
         new_pos = np.array([clamped_x, clamped_y], dtype=np.float32)
         if self._collides_with_obstacle(new_pos):
             collision = True
+            collision_type = "obstacle"
             new_pos = self.agent_pos  # stay in place on obstacle collision
 
         self.agent_pos = new_pos
-        return collision
+        return collision, collision_type
 
     def _get_observation(self) -> np.ndarray:
         self._last_sensor_distances = self._sensor_distances()
@@ -196,7 +232,11 @@ class LinearNavigatorEnv(gym.Env):
             [np.clip(self._distance_to_goal() / self._max_goal_distance, 0.0, 1.0)],
             dtype=np.float32,
         )
-        observation = np.concatenate([normalized_pos, orientation, distance_norm, sensor_readings])
+        goal_dir = self._goal_direction_vector().astype(np.float32)
+        self._last_goal_direction = goal_dir
+        observation = np.concatenate(
+            [normalized_pos, orientation, distance_norm, goal_dir, sensor_readings]
+        )
         return observation.astype(np.float32)
 
     def _sensor_distances(self) -> Tuple[float, ...]:
@@ -269,6 +309,13 @@ class LinearNavigatorEnv(gym.Env):
 
     def _distance_to_goal(self) -> float:
         return float(np.linalg.norm(self.goal_pos - self.agent_pos))
+
+    def _goal_direction_vector(self) -> np.ndarray:
+        delta = self.goal_pos - self.agent_pos
+        norm = np.linalg.norm(delta)
+        if norm < 1e-6:
+            return np.zeros(2, dtype=np.float32)
+        return delta / norm
 
     @staticmethod
     def _wrap_angle(angle: float) -> float:

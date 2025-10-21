@@ -32,6 +32,8 @@ class NavigatorConfig:
     forward_speed: float = 6.0
     turn_speed: float = math.pi / 14.0
     max_episode_steps: int = 400
+    collision_penalty: float = 1.0
+    border_thickness: int = 6
     sensor_angles: Sequence[float] = field(
         default_factory=lambda: tuple(
             i * (2.0 * math.pi / 8.0) for i in range(8)
