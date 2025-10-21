@@ -47,6 +47,7 @@ class LinearNavigatorEnv(gym.Env):
         self._renderer: Optional[NavigatorRenderer] = None
         self._max_goal_distance = math.hypot(self.config.map_width, self.config.map_height)
         self._last_sensor_distances: Tuple[float, ...] = tuple(0.0 for _ in range(self._sensor_count))
+        self._last_sensor_norms: Tuple[float, ...] = tuple(0.0 for _ in range(self._sensor_count))
         self._last_goal_direction = np.zeros(2, dtype=np.float32)
         self._action_history: Deque[int] = deque(maxlen=8)
         self._consecutive_idle = 0
@@ -65,6 +66,10 @@ class LinearNavigatorEnv(gym.Env):
         self._prev_position = self.agent_pos.copy()
         self._refresh_obstacles()
         self._last_sensor_distances = self._sensor_distances()
+        self._last_sensor_norms = tuple(
+            np.clip(dist / self.config.sensor_range, 0.0, 1.0)
+            for dist in self._last_sensor_distances
+        )
         self._last_goal_direction = self._goal_direction_vector().astype(np.float32)
         self._action_history.clear()
         self._consecutive_idle = 0
@@ -128,11 +133,30 @@ class LinearNavigatorEnv(gym.Env):
             if self._last_sensor_distances
             else 1.0
         )
-        safety_threshold = 0.3
         safety_penalty = 0.0
-        if min_sensor_norm < safety_threshold:
-            safety_penalty = 0.1 * (safety_threshold - min_sensor_norm)
+        if min_sensor_norm < self.config.safety_threshold:
+            safety_penalty = self.config.safety_penalty_gain * (
+                self.config.safety_threshold - min_sensor_norm
+            )
             reward -= safety_penalty
+
+        forward_fraction = self._directional_sensor_fraction(0.0)
+        left_fraction = self._directional_sensor_fraction(math.pi / 2)
+        right_fraction = self._directional_sensor_fraction(-math.pi / 2)
+        forward_penalty = 0.0
+        turn_bonus = 0.0
+        if forward_fraction < self.config.forward_block_threshold:
+            if action == 0:
+                forward_penalty = self.config.safety_penalty_gain * (
+                    self.config.forward_block_threshold - forward_fraction
+                )
+                reward -= forward_penalty
+            elif action == 1 and left_fraction > right_fraction + 0.05:
+                turn_bonus = self.config.turn_bonus_gain
+                reward += turn_bonus
+            elif action == 2 and right_fraction > left_fraction + 0.05:
+                turn_bonus = self.config.turn_bonus_gain
+                reward += turn_bonus
 
         if progress_reward < 0:
             self._consecutive_negative_progress += 1
@@ -140,7 +164,7 @@ class LinearNavigatorEnv(gym.Env):
             self._consecutive_negative_progress = 0
         negative_progress_penalty = 0.0
         if self._consecutive_negative_progress >= 3:
-            negative_progress_penalty = 0.015 * (self._consecutive_negative_progress - 2)
+            negative_progress_penalty = 0.02 * (self._consecutive_negative_progress - 2)
             reward -= negative_progress_penalty
 
         terminated = False
@@ -178,6 +202,11 @@ class LinearNavigatorEnv(gym.Env):
             "safety_penalty": safety_penalty,
             "oscillation_penalty": oscillation_penalty,
             "negative_progress_penalty": negative_progress_penalty,
+            "forward_fraction": forward_fraction,
+            "left_fraction": left_fraction,
+            "right_fraction": right_fraction,
+            "forward_penalty": forward_penalty,
+            "turn_bonus": turn_bonus,
         }
         return observation, float(reward), terminated, truncated, info
 
@@ -336,6 +365,7 @@ class LinearNavigatorEnv(gym.Env):
         )
         goal_dir = self._goal_direction_vector().astype(np.float32)
         self._last_goal_direction = goal_dir
+        self._last_sensor_norms = tuple(float(val) for val in sensor_readings)
         observation = np.concatenate(
             [normalized_pos, orientation, distance_norm, goal_dir, sensor_readings]
         )
@@ -370,6 +400,21 @@ class LinearNavigatorEnv(gym.Env):
                 )
             )
         return tuple(rays)
+
+    def _directional_sensor_fraction(self, target_angle: float, tolerance: float = math.pi / 16) -> float:
+        if not self._last_sensor_norms:
+            return 1.0
+        best_norm = 0.0
+        closest_norm = 0.0
+        closest_delta = math.inf
+        for rel_angle, norm in zip(self.config.sensor_angles, self._last_sensor_norms):
+            delta = abs(self._angle_difference(rel_angle, target_angle))
+            if delta <= tolerance and norm > best_norm:
+                best_norm = norm
+            if delta < closest_delta:
+                closest_delta = delta
+                closest_norm = norm
+        return best_norm if best_norm > 0.0 else closest_norm
 
     def _is_rotation_loop(self) -> bool:
         if len(self._action_history) < 4:
@@ -419,6 +464,15 @@ class LinearNavigatorEnv(gym.Env):
             if distance is not None and 0.0 <= distance < min_distance:
                 min_distance = distance
         return min_distance
+
+    @staticmethod
+    def _angle_difference(angle_a: float, angle_b: float) -> float:
+        diff = angle_a - angle_b
+        while diff > math.pi:
+            diff -= 2 * math.pi
+        while diff <= -math.pi:
+            diff += 2 * math.pi
+        return diff
 
     def _distance_to_goal(self) -> float:
         return float(np.linalg.norm(self.goal_pos - self.agent_pos))

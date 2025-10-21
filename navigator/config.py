@@ -44,8 +44,12 @@ class NavigatorConfig:
     turn_speed: float = math.pi / 14.0
     max_episode_steps: int = 400
     collision_penalty: float = 1.0
-    idle_penalty: float = 0.05
+    idle_penalty: float = 0.08
     border_thickness: int = 6
+    safety_threshold: float = 0.35
+    safety_penalty_gain: float = 0.2
+    forward_block_threshold: float = 0.25
+    turn_bonus_gain: float = 0.03
     sensor_angles: Sequence[float] = field(
         default_factory=lambda: tuple(
             i * (2.0 * math.pi / 16.0) for i in range(16)

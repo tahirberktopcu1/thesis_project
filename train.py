@@ -66,6 +66,14 @@ def main() -> None:
         verbose=1,
         tensorboard_log=str(args.log_dir),
         seed=args.seed,
+        n_steps=4096,
+        batch_size=1024,
+        learning_rate=3e-4,
+        gae_lambda=0.95,
+        ent_coef=0.01,
+        policy_kwargs={
+            "net_arch": dict(pi=[128, 128], vf=[128, 128]),
+        },
     )
 
     eval_callback = EvalCallback(
