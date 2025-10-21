@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import replace
 from pathlib import Path
 
 from stable_baselines3 import PPO
@@ -11,12 +12,17 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from navigator.env import LinearNavigatorEnv
+from navigator import NavigatorConfig, LinearNavigatorEnv
 
 
-def make_env(render_mode: str | None = None, seed: int | None = None):
+def make_env(
+    config: NavigatorConfig,
+    render_mode: str | None = None,
+    seed: int | None = None,
+):
     def _init():
-        env = LinearNavigatorEnv(render_mode=render_mode)
+        env_config = replace(config)
+        env = LinearNavigatorEnv(config=env_config, render_mode=render_mode)
         wrapped = Monitor(env)
         wrapped.reset(seed=seed)
         return wrapped
@@ -35,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Open a Pygame window and render the agent live during training (slows training).",
     )
+    parser.add_argument(
+        "--random-map",
+        action="store_true",
+        help="Randomize obstacle placement on every episode reset.",
+    )
     return parser.parse_args()
 
 
@@ -43,9 +54,11 @@ def main() -> None:
     os.makedirs(args.log_dir, exist_ok=True)
     os.makedirs(args.model_dir, exist_ok=True)
 
+    base_config = NavigatorConfig(randomize_obstacles=args.random_map)
+
     train_render_mode = "human" if args.render_training else None
-    env = DummyVecEnv([make_env(render_mode=train_render_mode, seed=args.seed)])
-    eval_env = DummyVecEnv([make_env(render_mode=None, seed=args.seed + 1)])
+    env = DummyVecEnv([make_env(base_config, render_mode=train_render_mode, seed=args.seed)])
+    eval_env = DummyVecEnv([make_env(base_config, render_mode=None, seed=args.seed + 1)])
 
     model = PPO(
         policy="MlpPolicy",

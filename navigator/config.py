@@ -21,34 +21,49 @@ class RectangleObstacle:
         return (self.x, self.y, self.x + self.width, self.y + self.height)
 
 
+@dataclass(frozen=True)
+class RandomObstacleSpec:
+    """Parameters that control randomly generated rectangular obstacles."""
+
+    count: int = 6
+    min_size: Tuple[float, float] = (42.0, 72.0)
+    max_size: Tuple[float, float] = (96.0, 192.0)
+    min_margin: float = 48.0
+    max_attempts: int = 200
+
+
 @dataclass
 class NavigatorConfig:
     """Holds tunable parameters for the navigation task."""
 
-    map_width: int = 640
-    map_height: int = 480
+    map_width: int = 768  # 20% daha geniş
+    map_height: int = 576  # 20% daha yüksek
     agent_radius: int = 12
     goal_radius: int = 18
     forward_speed: float = 6.0
     turn_speed: float = math.pi / 14.0
     max_episode_steps: int = 400
     collision_penalty: float = 1.0
+    idle_penalty: float = 0.05
     border_thickness: int = 6
     sensor_angles: Sequence[float] = field(
         default_factory=lambda: tuple(
-            i * (2.0 * math.pi / 8.0) for i in range(8)
+            i * (2.0 * math.pi / 16.0) for i in range(16)
         )
     )
-    sensor_range: float = 200.0
+    sensor_range: float = 240.0
     start_pos: Optional[Tuple[float, float]] = None
     goal_pos: Optional[Tuple[float, float]] = None
     obstacles: Sequence[RectangleObstacle | Tuple[float, float, float, float]] = field(
         default_factory=lambda: (
-            RectangleObstacle(220.0, 120.0, 40.0, 200.0),
-            RectangleObstacle(360.0, 60.0, 50.0, 140.0),
-            RectangleObstacle(430.0, 260.0, 70.0, 160.0),
+            RectangleObstacle(264.0, 144.0, 48.0, 240.0),
+            RectangleObstacle(432.0, 72.0, 60.0, 168.0),
+            RectangleObstacle(516.0, 312.0, 84.0, 192.0),
         )
     )
+    randomize_obstacles: bool = False
+    keep_static_when_random: bool = False
+    random_obstacle_spec: RandomObstacleSpec = field(default_factory=RandomObstacleSpec)
 
     def resolved_start(self) -> Tuple[float, float]:
         """Return the starting position, defaulting to the left center."""

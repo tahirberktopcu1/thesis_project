@@ -8,7 +8,7 @@ from pathlib import Path
 
 from stable_baselines3 import PPO
 
-from navigator.env import LinearNavigatorEnv
+from navigator import NavigatorConfig, LinearNavigatorEnv
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +21,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--episodes", type=int, default=5, help="Number of episodes to watch")
     parser.add_argument("--sleep", type=float, default=0.02, help="Delay between steps in seconds")
+    parser.add_argument(
+        "--random-map",
+        action="store_true",
+        help="Randomize obstacle placement on reset (must match training configuration).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional random seed for reproducible playback.",
+    )
     return parser.parse_args()
 
 
@@ -32,11 +43,17 @@ def main() -> None:
         )
 
     model = PPO.load(args.model_path)
-    env = LinearNavigatorEnv(render_mode="human")
+    config = NavigatorConfig(randomize_obstacles=args.random_map)
+    env = LinearNavigatorEnv(config=config, render_mode="human")
 
     try:
+        seed = args.seed
         for _ in range(args.episodes):
-            obs, _info = env.reset()
+            if seed is not None:
+                obs, _info = env.reset(seed=seed)
+                seed = None
+            else:
+                obs, _info = env.reset()
             terminated = False
             truncated = False
             while not (terminated or truncated):

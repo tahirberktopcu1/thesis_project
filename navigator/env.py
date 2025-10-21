@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Sequence, Tuple
+from collections import deque
+from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .config import NavigatorConfig, RectangleObstacle
+from .config import NavigatorConfig, RandomObstacleSpec, RectangleObstacle
 from .renderer import NavigatorRenderer, RenderFrame
 
 
@@ -26,7 +27,8 @@ class LinearNavigatorEnv(gym.Env):
         self.render_mode = render_mode
 
         self.action_space = spaces.Discrete(3)  # forward, turn left, turn right
-        self._obstacles: Tuple[RectangleObstacle, ...] = self.config.resolved_obstacles()
+        self._static_obstacles: Tuple[RectangleObstacle, ...] = self.config.resolved_obstacles()
+        self._obstacles: Tuple[RectangleObstacle, ...] = self._static_obstacles
         self._sensor_count = len(self.config.sensor_angles)
 
         base_low = np.array([-1.0, -1.0, -1.0, -1.0, 0.0, -1.0, -1.0], dtype=np.float32)
@@ -40,11 +42,15 @@ class LinearNavigatorEnv(gym.Env):
         self.agent_pos = np.zeros(2, dtype=np.float32)
         self.agent_angle = 0.0
         self.goal_pos = np.zeros(2, dtype=np.float32)
+        self._prev_position = np.zeros(2, dtype=np.float32)
         self._step_count = 0
         self._renderer: Optional[NavigatorRenderer] = None
         self._max_goal_distance = math.hypot(self.config.map_width, self.config.map_height)
         self._last_sensor_distances: Tuple[float, ...] = tuple(0.0 for _ in range(self._sensor_count))
         self._last_goal_direction = np.zeros(2, dtype=np.float32)
+        self._action_history: Deque[int] = deque(maxlen=8)
+        self._consecutive_idle = 0
+        self._consecutive_negative_progress = 0
 
         self.reset(seed=None)
 
@@ -56,8 +62,13 @@ class LinearNavigatorEnv(gym.Env):
         self.agent_pos = np.array(self.config.resolved_start(), dtype=np.float32)
         self.agent_angle = 0.0
         self.goal_pos = np.array(self.config.resolved_goal(), dtype=np.float32)
+        self._prev_position = self.agent_pos.copy()
+        self._refresh_obstacles()
         self._last_sensor_distances = self._sensor_distances()
         self._last_goal_direction = self._goal_direction_vector().astype(np.float32)
+        self._action_history.clear()
+        self._consecutive_idle = 0
+        self._consecutive_negative_progress = 0
 
         if self.render_mode == "human":
             self._ensure_renderer()
@@ -84,12 +95,13 @@ class LinearNavigatorEnv(gym.Env):
 
         self.agent_angle = self._wrap_angle(self.agent_angle)
         self._step_count += 1
+        self._action_history.append(action)
 
         observation = self._get_observation()
         distance = self._distance_to_goal()
-        distance_reward = (prev_distance - distance) * 0.1
-        step_penalty = 0.01 if action == 0 else 0.002
-        reward = distance_reward - step_penalty
+        progress_reward = (prev_distance - distance) * 0.25
+        step_penalty = 0.01 if action == 0 else 0.005
+        reward = progress_reward - step_penalty
 
         orientation_vec = np.array(
             [math.cos(self.agent_angle), math.sin(self.agent_angle)],
@@ -97,15 +109,39 @@ class LinearNavigatorEnv(gym.Env):
         )
         goal_dir = self._goal_direction_vector()
         alignment = float(np.dot(orientation_vec, goal_dir))
-        reward += 0.05 * alignment
+        reward += 0.02 * alignment
+
+        displacement = float(np.linalg.norm(self.agent_pos - self._prev_position))
+        self._prev_position = self.agent_pos.copy()
+        move_threshold = 1.0
+        oscillation_penalty = 0.0
+        if displacement < move_threshold:
+            self._consecutive_idle += 1
+            if self._consecutive_idle >= 3 and self._is_rotation_loop():
+                oscillation_penalty = self.config.idle_penalty * (self._consecutive_idle - 2)
+                reward -= oscillation_penalty
+        else:
+            self._consecutive_idle = 0
 
         min_sensor_norm = float(
             min(self._last_sensor_distances) / self.config.sensor_range
             if self._last_sensor_distances
             else 1.0
         )
-        proximity_penalty = 1.0 - np.clip(min_sensor_norm, 0.0, 1.0)
-        reward -= 0.05 * (proximity_penalty**2)
+        safety_threshold = 0.3
+        safety_penalty = 0.0
+        if min_sensor_norm < safety_threshold:
+            safety_penalty = 0.1 * (safety_threshold - min_sensor_norm)
+            reward -= safety_penalty
+
+        if progress_reward < 0:
+            self._consecutive_negative_progress += 1
+        else:
+            self._consecutive_negative_progress = 0
+        negative_progress_penalty = 0.0
+        if self._consecutive_negative_progress >= 3:
+            negative_progress_penalty = 0.015 * (self._consecutive_negative_progress - 2)
+            reward -= negative_progress_penalty
 
         terminated = False
         truncated = False
@@ -136,6 +172,12 @@ class LinearNavigatorEnv(gym.Env):
             "terminated_reason": reason,
             "goal_alignment": alignment,
             "min_sensor_norm": min_sensor_norm,
+            "displacement": displacement,
+            "progress_reward": progress_reward,
+            "step_penalty": step_penalty,
+            "safety_penalty": safety_penalty,
+            "oscillation_penalty": oscillation_penalty,
+            "negative_progress_penalty": negative_progress_penalty,
         }
         return observation, float(reward), terminated, truncated, info
 
@@ -180,6 +222,66 @@ class LinearNavigatorEnv(gym.Env):
                 render_mode=self.render_mode,
                 border_thickness=self.config.border_thickness,
             )
+
+    def _refresh_obstacles(self) -> None:
+        if self.config.randomize_obstacles:
+            self._obstacles = self._generate_random_obstacles()
+        else:
+            self._obstacles = self._static_obstacles
+
+    def _generate_random_obstacles(self) -> Tuple[RectangleObstacle, ...]:
+        spec = self.config.random_obstacle_spec
+        rng = getattr(self, "np_random", np.random.default_rng())
+
+        min_width, max_width = sorted((spec.min_size[0], spec.max_size[0]))
+        min_height, max_height = sorted((spec.min_size[1], spec.max_size[1]))
+
+        base_obstacles: Tuple[RectangleObstacle, ...] = (
+            self._static_obstacles if self.config.keep_static_when_random else ()
+        )
+        generated: List[RectangleObstacle] = []
+        attempts = 0
+        agent_clearance = self.config.agent_radius + spec.min_margin
+
+        existing_bounds = [obs.as_bounds() for obs in base_obstacles]
+        start_point = tuple(self.agent_pos)
+        goal_point = tuple(self.goal_pos)
+
+        while len(generated) < spec.count and attempts < spec.max_attempts:
+            attempts += 1
+
+            width = float(rng.uniform(min_width, max_width))
+            height = float(rng.uniform(min_height, max_height))
+
+            x_min_bound = self.config.border_thickness + spec.min_margin
+            x_max_bound = self.config.map_width - self.config.border_thickness - width - spec.min_margin
+            y_min_bound = self.config.border_thickness + spec.min_margin
+            y_max_bound = self.config.map_height - self.config.border_thickness - height - spec.min_margin
+
+            if x_max_bound <= x_min_bound or y_max_bound <= y_min_bound:
+                break
+
+            x = float(rng.uniform(x_min_bound, x_max_bound))
+            y = float(rng.uniform(y_min_bound, y_max_bound))
+            candidate = RectangleObstacle(x, y, width, height)
+            bounds = candidate.as_bounds()
+
+            if self._circle_intersects_rect(start_point, agent_clearance, bounds):
+                continue
+            if self._circle_intersects_rect(goal_point, agent_clearance, bounds):
+                continue
+
+            overlap = False
+            for existing in existing_bounds + [obs.as_bounds() for obs in generated]:
+                if self._rectangles_overlap(bounds, existing, spec.min_margin):
+                    overlap = True
+                    break
+            if overlap:
+                continue
+
+            generated.append(candidate)
+
+        return base_obstacles + tuple(generated)
 
     def _move_forward(self) -> Tuple[bool, Optional[str]]:
         dx = math.cos(self.agent_angle) * self.config.forward_speed
@@ -269,6 +371,17 @@ class LinearNavigatorEnv(gym.Env):
             )
         return tuple(rays)
 
+    def _is_rotation_loop(self) -> bool:
+        if len(self._action_history) < 4:
+            return False
+        recent = list(self._action_history)[-4:]
+        if 0 in recent:
+            return False
+        unique = set(recent)
+        if unique != {1, 2}:
+            return False
+        return all(recent[i] != recent[i + 1] for i in range(len(recent) - 1))
+
     def _distance_to_boundary(self, angle: float) -> float:
         dx = math.cos(angle)
         dy = math.sin(angle)
@@ -327,12 +440,8 @@ class LinearNavigatorEnv(gym.Env):
 
     def _collides_with_obstacle(self, position: np.ndarray) -> bool:
         radius = self.config.agent_radius
-        px, py = float(position[0]), float(position[1])
         for obstacle in self._obstacles:
-            x_min, y_min, x_max, y_max = obstacle.as_bounds()
-            nearest_x = min(max(px, x_min), x_max)
-            nearest_y = min(max(py, y_min), y_max)
-            if (px - nearest_x) ** 2 + (py - nearest_y) ** 2 <= radius**2:
+            if self._circle_intersects_rect(position, radius, obstacle.as_bounds()):
                 return True
         return False
 
@@ -375,3 +484,34 @@ class LinearNavigatorEnv(gym.Env):
         if t_min < 0.0:
             return t_max if t_max >= 0.0 else None
         return t_min
+
+    @staticmethod
+    def _rectangles_overlap(
+        bounds_a: Tuple[float, float, float, float],
+        bounds_b: Tuple[float, float, float, float],
+        margin: float,
+    ) -> bool:
+        ax1, ay1, ax2, ay2 = bounds_a
+        bx1, by1, bx2, by2 = bounds_b
+        if margin > 0.0:
+            ax1 -= margin
+            ay1 -= margin
+            ax2 += margin
+            ay2 += margin
+            bx1 -= margin
+            by1 -= margin
+            bx2 += margin
+            by2 += margin
+        return not (ax2 <= bx1 or ax1 >= bx2 or ay2 <= by1 or ay1 >= by2)
+
+    @staticmethod
+    def _circle_intersects_rect(
+        point: Sequence[float],
+        radius: float,
+        bounds: Tuple[float, float, float, float],
+    ) -> bool:
+        px, py = float(point[0]), float(point[1])
+        x_min, y_min, x_max, y_max = bounds
+        nearest_x = min(max(px, x_min), x_max)
+        nearest_y = min(max(py, y_min), y_max)
+        return (px - nearest_x) ** 2 + (py - nearest_y) ** 2 <= radius**2
