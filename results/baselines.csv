@@ -1,0 +1,3 @@
+algorithm,difficulty,episodes,success_rate,mean_path_length,median_path_length,mean_steps,mean_reward,mean_nodes_expanded
+ppo,hard,100,0.94,757.7295672607422,,151.51,134.21199771699798,
+astar,hard,100,1.0,775.1191512894364,769.7056274847715,,,582.76

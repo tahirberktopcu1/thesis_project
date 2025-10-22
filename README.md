@@ -51,6 +51,9 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 - `navigator/renderer.py`: Pygame renderer (obstacles, arrow indicator, and sensor rays with distance-based colors).
 - `train.py`: PPO learner with evaluation callback setup (now supports randomized maps).
 - `planners/`: Classical A* planner and helpers (`evaluate_planners.py` used for comparisons).
+- `visualize_results.py`: Generate comparison plots from CSV baselines.
+- `plot_training_curve.py`: Extract a scalar from TensorBoard logs and save a PNG.
+- `plot_trajectory.py`: Produce trajectory plots for PPO or random rollouts.
 - `enjoy.py`: Playback script to watch the trained agent in human render mode.
 
 ### Classical Planner Benchmark
@@ -68,3 +71,4 @@ python evaluate_rl.py --model models/ppo_linear_navigator.zip --episodes 100 --s
 ```
 
 Both scripts report success rate, path length, and related metrics; when `--csv` is provided they append rows to the same file so you can build comparison tables directly.
+
