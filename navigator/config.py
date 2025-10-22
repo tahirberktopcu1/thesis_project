@@ -37,7 +37,7 @@ class NavigatorConfig:
     """Holds tunable parameters for the navigation task."""
 
     map_width: int = 768  # 20% daha geniş
-    map_height: int = 576  # 20% daha yüksek
+    map_height: int = 576  # 20% daha yuksek
     agent_radius: int = 12
     goal_radius: int = 18
     forward_speed: float = 6.0
@@ -69,10 +69,6 @@ class NavigatorConfig:
     randomize_obstacles: bool = False
     keep_static_when_random: bool = False
     random_obstacle_spec: RandomObstacleSpec = field(default_factory=RandomObstacleSpec)
-    randomize_start_goal: bool = False
-    start_x_range: Tuple[float, float] = (0.05, 0.2)
-    goal_x_range: Tuple[float, float] = (0.8, 0.95)
-    start_goal_margin: float = 40.0
 
     def resolved_start(self) -> Tuple[float, float]:
         """Return the starting position, defaulting to the left center."""
@@ -96,3 +92,5 @@ class NavigatorConfig:
                 x, y, w, h = obstacle
                 normalized.append(RectangleObstacle(float(x), float(y), float(w), float(h)))
         return tuple(normalized)
+
+

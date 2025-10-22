@@ -20,16 +20,6 @@ Add `--render-training` if you want a live Pygame window while the agent trains 
 
 > Tip: For the best results on highly cluttered maps use a longer run, e.g. `python train.py --timesteps 500000 --random-map`. The default script trains PPO with a `[128, 128]` MLP, `n_steps=4096`, `batch_size=1024`, and a slight entropy bonus to keep exploration high.
 
-### Curriculum Mode
-
-For multi-stage training that gradually increases map difficulty, use the curriculum runner:
-
-```bash
-python train_curriculum.py --render-training --eval-freq 8000
-```
-
-Phases progress from sparse obstacles to dense mazes with random start/goal positions. Use `--phases warmup,hard` to run a subset or `--phase-steps 150000,350000` to override the default step budgets. Checkpoints and TensorBoard logs are created per phase inside their respective subfolders.
-
 TensorBoard logs are written to `logs/` and model checkpoints to `models/`.
 
 ## Watching the Trained Agent
@@ -50,7 +40,7 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 
 - Progress toward the goal is rewarded each step (scaled by 0.25); moving away produces an equal-magnitude penalty.
 - Every action carries a small time cost (forward > turn) plus a minor orientation bonus for facing the goal.
-- Safety is enforced via the closest distance sensor: if the reading drops below 35 % of the range, a proportional penalty is applied and forward motion is discouraged in favor of turning toward free space.
+- Safety is enforced via the closest distance sensor: if the reading drops below 35% of the range, the agent is penalized and forward motion is discouraged in favor of turning toward free space.
 - Only genuine loops are penalized—if the agent alternates left/right without translating for several steps, the idle penalty grows; purposeful turns that involve movement remain unpenalized. Repeated negative progress is also discouraged.
 - Colliding with the outer frame or any obstacle ends the episode immediately with an additional penalty; reaching the goal grants a success bonus.
 
@@ -60,7 +50,21 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 - `navigator/env.py`: Gym environment, observations, and reward shaping with obstacle collisions.
 - `navigator/renderer.py`: Pygame renderer (obstacles, arrow indicator, and sensor rays with distance-based colors).
 - `train.py`: PPO learner with evaluation callback setup (now supports randomized maps).
-- `train_curriculum.py`: Multi-phase trainer that escalates map complexity and saves per-phase checkpoints.
+- `planners/`: Classical A* planner and helpers (`evaluate_planners.py` used for comparisons).
 - `enjoy.py`: Playback script to watch the trained agent in human render mode.
 
+### Classical Planner Benchmark
 
+Run the classical baseline on random scenarios and optionally store metrics in CSV format:
+
+```bash
+python evaluate_planners.py --episodes 100 --resolution 12 --difficulty hard --csv results/baselines.csv --tag astar
+```
+
+Then evaluate the PPO agent with the same seed base:
+
+```bash
+python evaluate_rl.py --model models/ppo_linear_navigator.zip --episodes 100 --seed 123 --difficulty hard --csv results/baselines.csv --tag ppo
+```
+
+Both scripts report success rate, path length, and related metrics; when `--csv` is provided they append rows to the same file so you can build comparison tables directly.
