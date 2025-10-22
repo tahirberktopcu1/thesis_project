@@ -60,9 +60,10 @@ class LinearNavigatorEnv(gym.Env):
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
         self._step_count = 0
-        self.agent_pos = np.array(self.config.resolved_start(), dtype=np.float32)
+        start_pos, goal_pos = self._initial_positions()
+        self.agent_pos = np.array(start_pos, dtype=np.float32)
         self.agent_angle = 0.0
-        self.goal_pos = np.array(self.config.resolved_goal(), dtype=np.float32)
+        self.goal_pos = np.array(goal_pos, dtype=np.float32)
         self._prev_position = self.agent_pos.copy()
         self._refresh_obstacles()
         self._last_sensor_distances = self._sensor_distances()
@@ -381,6 +382,38 @@ class LinearNavigatorEnv(gym.Env):
             [normalized_pos, orientation, distance_norm, goal_dir, sensor_readings]
         )
         return observation.astype(np.float32)
+
+    def _initial_positions(self) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+        if not self.config.randomize_start_goal:
+            return self.config.resolved_start(), self.config.resolved_goal()
+
+        width = self.config.map_width
+        height = self.config.map_height
+        margin = self.config.start_goal_margin + self.config.agent_radius
+        rng = getattr(self, "np_random", np.random.default_rng())
+
+        def sample_x(range_pair: Tuple[float, float]) -> float:
+            low = max(margin, width * range_pair[0])
+            high = min(width - margin, width * range_pair[1])
+            if high <= low:
+                return float((low + high) / 2.0)
+            return float(rng.uniform(low, high))
+
+        def sample_y() -> float:
+            low = margin
+            high = height - margin
+            if high <= low:
+                return float((low + high) / 2.0)
+            return float(rng.uniform(low, high))
+
+        start = (sample_x(self.config.start_x_range), sample_y())
+        goal = (sample_x(self.config.goal_x_range), sample_y())
+        attempts = 0
+        min_separation = max(width, height) * 0.25
+        while np.linalg.norm(np.array(start) - np.array(goal)) < min_separation and attempts < 20:
+            goal = (sample_x(self.config.goal_x_range), sample_y())
+            attempts += 1
+        return start, goal
 
     def _sensor_distances(self) -> Tuple[float, ...]:
         distances = []

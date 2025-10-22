@@ -53,7 +53,7 @@ class NavigatorConfig:
     corner_margin: float = 10.0
     sensor_angles: Sequence[float] = field(
         default_factory=lambda: tuple(
-            i * (2.0 * math.pi / 16.0) for i in range(16)
+            i * (2.0 * math.pi / 24.0) for i in range(24)
         )
     )
     sensor_range: float = 240.0
@@ -69,6 +69,10 @@ class NavigatorConfig:
     randomize_obstacles: bool = False
     keep_static_when_random: bool = False
     random_obstacle_spec: RandomObstacleSpec = field(default_factory=RandomObstacleSpec)
+    randomize_start_goal: bool = False
+    start_x_range: Tuple[float, float] = (0.05, 0.2)
+    goal_x_range: Tuple[float, float] = (0.8, 0.95)
+    start_goal_margin: float = 40.0
 
     def resolved_start(self) -> Tuple[float, float]:
         """Return the starting position, defaulting to the left center."""

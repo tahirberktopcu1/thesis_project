@@ -20,6 +20,16 @@ Add `--render-training` if you want a live Pygame window while the agent trains 
 
 > Tip: For the best results on highly cluttered maps use a longer run, e.g. `python train.py --timesteps 500000 --random-map`. The default script trains PPO with a `[128, 128]` MLP, `n_steps=4096`, `batch_size=1024`, and a slight entropy bonus to keep exploration high.
 
+### Curriculum Mode
+
+For multi-stage training that gradually increases map difficulty, use the curriculum runner:
+
+```bash
+python train_curriculum.py --render-training --eval-freq 8000
+```
+
+Phases progress from sparse obstacles to dense mazes with random start/goal positions. Use `--phases warmup,hard` to run a subset or `--phase-steps 150000,350000` to override the default step budgets. Checkpoints and TensorBoard logs are created per phase inside their respective subfolders.
+
 TensorBoard logs are written to `logs/` and model checkpoints to `models/`.
 
 ## Watching the Trained Agent
@@ -34,7 +44,7 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 
 - Toggle random obstacle generation via CLI (`--random-map`) or directly through `NavigatorConfig`.
 - `NavigatorConfig.random_obstacle_spec` lets you adjust the count, size range, margin, and sampling attempts for random rectangles.
-- When random maps are enabled, every obstacle is sampled procedurally (static defaults are ignored unless `keep_static_when_random=True`). All rectangles respect safety margins around the borders, start, and goal so the agent always has a viable route.
+- When random maps are enabled, every obstacle is sampled procedurally (static defaults are ignored unless `keep_static_when_random=True`). Start and goal can also be randomized across configurable spawn bands while respecting safety margins, so every episode begins from a new lane.
 
 ## Reward Shaping
 
@@ -50,6 +60,7 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 - `navigator/env.py`: Gym environment, observations, and reward shaping with obstacle collisions.
 - `navigator/renderer.py`: Pygame renderer (obstacles, arrow indicator, and sensor rays with distance-based colors).
 - `train.py`: PPO learner with evaluation callback setup (now supports randomized maps).
+- `train_curriculum.py`: Multi-phase trainer that escalates map complexity and saves per-phase checkpoints.
 - `enjoy.py`: Playback script to watch the trained agent in human render mode.
 
 
