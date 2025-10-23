@@ -61,9 +61,9 @@ class NavigatorConfig:
     goal_pos: Optional[Tuple[float, float]] = None
     obstacles: Sequence[RectangleObstacle | Tuple[float, float, float, float]] = field(
         default_factory=lambda: (
-            RectangleObstacle(264.0, 144.0, 48.0, 240.0),
-            RectangleObstacle(432.0, 72.0, 60.0, 168.0),
-            RectangleObstacle(516.0, 312.0, 84.0, 192.0),
+            RectangleObstacle(180.0, 120.0, 72.0, 180.0),
+            RectangleObstacle(360.0, 260.0, 90.0, 150.0),
+            RectangleObstacle(520.0, 80.0, 70.0, 210.0),
         )
     )
     randomize_obstacles: bool = False
