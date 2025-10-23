@@ -1,60 +1,14 @@
-# Presentation Outline – Reinforcement Learning-Based Path Planning
+# Project Highlights - Reinforcement Learning-Based Path Planning
 
-Use the following structure when creating the slide deck (PowerPoint/Google Slides).
+This document lists the main talking points presented during the defence of the project "Reinforcement Learning-Based Path Planning for a Mobile Robot."
 
-1. **Title Slide**
-   - Project title: “Reinforcement Learning-Based Path Planning for a Mobile Robot”
-   - Author name, supervisor(s), institution, date
-
-2. **Motivation & Problem Statement**
-   - Bullet: Navigation challenges in cluttered/dynamic environments
-   - Bullet: Limitations of classical planners (A*, D*) – handcrafted heuristics, static maps
-   - Bullet: Opportunity for adaptive policies learned via RL
-
-3. **Objectives**
-   - Design Gym-based navigation environment with configurable obstacles
-   - Train PPO agent and benchmark vs. classical planner (A*)
-   - Visualise learning behaviour and compare metrics (path, success, nodes expanded)
-
-4. **Literature Snapshot**
-   - Classical planning (A*, D*, RRT)
-   - Deep RL: DQN vs. PPO; why PPO chosen
-   - References: Koenig & Likhachev 2002, Mnih 2015, Schulman 2017, Chen 2019
-
-5. **Environment Design**
-   - Diagram/screenshot of arena (if possible)
-   - Map size, obstacle generation, sensors (24 rays), discrete actions
-
-6. **Reward & Agent Design**
-   - Reward components (progress, safety, oscillation penalty, terminal reward)
-   - Action space (forward, turn left/right)
-
-7. **Model Training**
-   - PPO hyperparameters (net_arch [128,128], n_steps=4096, batch_size=1024, lr=3e-4, ent_coef=0.01)
-   - TensorBoard training curve (`results/figures/training_curve.png`)
-
-8. **Evaluation Protocol**
-   - Shared seeds for PPO and A*
-   - 100 episodes, difficulty “hard”, metrics recorded
-   - Mention A* grid resolution (12 px) and path inflation
-
-9. **Results (Quantitative)**
-   - Insert metric table or bar chart (`results/figures/comparison_hard.png`)
-   - Highlight: PPO success 94 %, mean path 757 px; A* success 100 %, path 775 px, nodes 583
-
-10. **Qualitative Behaviour**
-    - Include trajectory plot (`results/figures/trajectory_hard.png`)
-    - Discuss PPO avoiding oscillation / A* determinism
-
-11. **Discussion**
-    - Trade-off: PPO adaptability vs. A* determinism
-    - Failure modes (PPO in tight corridors) vs. computational cost (A*)
-
-12. **Conclusion & Future Work**
-    - Summary of findings
-    - Future directions: RRT baseline, curriculum learning, dynamic obstacles, sim-to-real
-
-13. **Q&A / Contact Info**
-    - Acknowledge supervisors, provide contact email
-
-Use the thesis report (`thesis_full.md`) and experiment figures from `results/figures/` to populate detailed content on each slide.
+- **Project identity:** Title, author (Tahir), supervising department, and academic term.
+- **Motivation:** Classical planners (A* and related methods) depend on complete maps and manual heuristics; reinforcement learning offers adaptive navigation by learning from interaction.
+- **Objectives achieved:** A Gymnasium-based environment with rectangular obstacles, a PPO agent trained for autonomous navigation, comparative evaluation against an A* baseline, and reproducible documentation of all experiments.
+- **Environment summary:** 768x576 pixel arena, boundary walls, 24 ray sensors covering 360 degrees, discrete actions (forward, turn left, turn right), and optional random obstacle layouts.
+- **Reward structure:** Progress bonus, time penalty, heading alignment incentive, sensor-based safety penalties, oscillation discouragement, success bonus, and collision penalty.
+- **Training configuration:** Stable-Baselines3 PPO with net architecture [128,128], n_steps 4096, batch size 1024, learning rate 3e-4, entropy coefficient 0.01; logs stored in `logs/`, checkpoints in `models/`.
+- **Evaluation approach:** 100 randomised episodes per algorithm at "hard" difficulty, identical seeds for PPO and A*, metrics captured in `results/baselines.csv` (success rate, path length, steps, reward, nodes expanded).
+- **Key quantitative results:** PPO success rate approximately 94 percent with mean path length around 758 pixels; A* success rate 100 percent with mean path length around 775 pixels and roughly 583 nodes expanded.
+- **Visual evidence:** `results/figures/training_curve.png` (learning progress), `comparison_hard.png` (metric comparison), `trajectory_hard.png` (representative path).
+- **Conclusions and next steps:** PPO provides shorter paths but occasional failures in tight corridors; A* remains deterministic but slightly longer. Proposed extensions include RRT baselines, curriculum learning, dynamic obstacles, and sim-to-real transfer experiments.

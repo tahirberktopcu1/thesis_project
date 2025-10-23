@@ -25,7 +25,7 @@ class AStarResult:
 
 @dataclass
 class GridMap:
-    occupancy: np.ndarray  # True => blocked
+    occupancy: np.ndarray
     resolution: float
     origin: Tuple[float, float]
 

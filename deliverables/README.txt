@@ -3,16 +3,15 @@
 ## 1. Thesis Report
 - File: `deliverables/thesis_full.md`
 - Contents: full thesis text (abstract, introduction, literature review, methodology, results, conclusion, references, appendices).
-- Action: Convert to PDF using Markdown converter (e.g., pandoc) or paste into Word/Latex template before submission.
-  - Example pandoc command: `pandoc thesis_full.md -o thesis_full.pdf`
+- Notes: ready for conversion to PDF or import into a Word/LaTeX template if required by submission guidelines.
 
-## 2. Presentation Slides
-- Outline provided (`deliverables/presentation_outline.md`).
-- Required figures (copy from project root if necessary):
+## 2. Presentation Summary
+- File: `deliverables/presentation_outline.md` (key talking points captured during the defence).
+- Figures available for inclusion in supporting material:
   - `results/figures/training_curve.png`
   - `results/figures/comparison_hard.png`
   - `results/figures/trajectory_hard.png`
-- Prepare ~12–14 slides following outline and embed population-specific data from `results/baselines.csv`.
+- Metrics source: `results/baselines.csv` (success rate, path length, steps, reward, nodes expanded).
 
 ## 3. Supporting Scripts & Data
 - Code repositories already contain:

@@ -90,7 +90,7 @@ def main() -> None:
     else:
         plot_bar(axes[1][1], algorithms, expansions, "Mean Nodes Expanded", "nodes")
 
-    fig.suptitle(f"Baseline Comparison – Difficulty: {args.difficulty}")
+    fig.suptitle(f"Baseline Comparison - Difficulty: {args.difficulty}")
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     out_path = args.out_dir / f"comparison_{args.difficulty}.png"

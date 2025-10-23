@@ -9,9 +9,9 @@ import numpy as np
 
 try:
     import pygame
-except ImportError as exc:  # pragma: no cover - handled at runtime
+except ImportError as exc:
     raise RuntimeError(
-        "Pygame bulunamadi. Lutfen `pip install pygame` komutuyla yukleyin."
+        "Pygame is required. Install it with `pip install pygame`."
     ) from exc
 
 
@@ -40,8 +40,8 @@ class NavigatorRenderer:
             self._surface = pygame.Surface((self.width, self.height))
         elif self.render_mode == "rgb_array":
             self._surface = pygame.Surface((self.width, self.height))
-        else:  # pragma: no cover - validated by caller
-            raise ValueError(f"Bilinmeyen render_mode: {self.render_mode}")
+        else:
+            raise ValueError(f"Unknown render_mode: {self.render_mode}")
 
         self.reset()
 
@@ -78,7 +78,6 @@ class NavigatorRenderer:
             pygame.display.flip()
             return None
 
-        # Transpose from (width, height, channels) to (height, width, channels)
         frame = pygame.surfarray.array3d(surface)
         return np.transpose(frame, (1, 0, 2))
 
@@ -120,7 +119,6 @@ class NavigatorRenderer:
         cx, cy = agent_pos
         pygame.draw.circle(surface, (90, 140, 255), (int(cx), int(cy)), self.agent_radius)
 
-        # Arrow tip for orientation
         tip_length = self.agent_radius * 1.8
         left_angle = agent_angle + 2.5
         right_angle = agent_angle - 2.5

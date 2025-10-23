@@ -36,8 +36,8 @@ class RandomObstacleSpec:
 class NavigatorConfig:
     """Holds tunable parameters for the navigation task."""
 
-    map_width: int = 768  # 20% daha geniş
-    map_height: int = 576  # 20% daha yuksek
+    map_width: int = 768
+    map_height: int = 576
     agent_radius: int = 12
     goal_radius: int = 18
     forward_speed: float = 6.0

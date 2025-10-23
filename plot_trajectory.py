@@ -117,7 +117,7 @@ def main() -> None:
     ax.set_xlim(0, env.config.map_width)
     ax.set_ylim(0, env.config.map_height)
     ax.set_aspect("equal")
-    ax.set_title(f"Trajectory ({'random' if model is None else 'PPO'}) – seed={args.seed}")
+    ax.set_title(f"Trajectory ({'random' if model is None else 'PPO'}) - seed={args.seed}")
     ax.set_xlabel("x (px)")
     ax.set_ylabel("y (px)")
     ax.legend()

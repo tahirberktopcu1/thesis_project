@@ -41,7 +41,7 @@ python enjoy.py --model-path models/ppo_linear_navigator.zip
 - Progress toward the goal is rewarded each step (scaled by 0.25); moving away produces an equal-magnitude penalty.
 - Every action carries a small time cost (forward > turn) plus a minor orientation bonus for facing the goal.
 - Safety is enforced via the closest distance sensor: if the reading drops below 35% of the range, the agent is penalized and forward motion is discouraged in favor of turning toward free space.
-- Only genuine loops are penalized—if the agent alternates left/right without translating for several steps, the idle penalty grows; purposeful turns that involve movement remain unpenalized. Repeated negative progress is also discouraged.
+- Only genuine loops are penalized-if the agent alternates left/right without translating for several steps, the idle penalty grows; purposeful turns that involve movement remain unpenalized. Repeated negative progress is also discouraged.
 - Colliding with the outer frame or any obstacle ends the episode immediately with an additional penalty; reaching the goal grants a success bonus.
 
 ## Project Layout

@@ -1,4 +1,4 @@
-# Step 6 – Visualisation and Analysis
+# Step 6 - Visualisation and Analysis
 
 ## 6.1 Objectives
 - Present quantitative results (success rate, path length, computational effort) in easily interpretable plots.
@@ -42,7 +42,7 @@
 - The script writes `results/figures/training_curve.png`; include both raw and smoothed curves when discussing convergence speed, stability, and plateaus.
 
 ## 6.5 Qualitative Analysis
-- Use `python enjoy.py --model ... --render-training` to observe the agent’s behaviour in real time. Optional: screen record segments for presentation.
+- Use `python enjoy.py --model ... --render-training` to observe the agent's behaviour in real time. Optional: screen record segments for presentation.
 - Generate reproducible trajectory plots:
   ```bash
   python plot_trajectory.py \
@@ -54,11 +54,11 @@
 - Note behavioural patterns: e.g., PPO detours slightly longer than A* but avoids oscillation, or fails in specific corner cases. Use the saved trajectory figures to illustrate these behaviours in the thesis.
 
 ## 6.6 Sample Result Interpretation
-Using the current hard-difficulty baseline (seed = 123, 100 episodes):
-- **PPO**: 94 % success, mean path ≈ 758 px, mean steps ≈ 152, mean reward ≈ 134.  
-- **A***: 100 % success, mean path ≈ 775 px, median ≈ 770 px, mean nodes expanded ≈ 583.
+Using the current hard-difficulty baseline (seed = 123, 100 episodes):
+- **PPO**: 94 % success, mean path approx. 758 px, mean steps approx. 152, mean reward approx. 134.  
+- **A***: 100 % success, mean path approx. 775 px, median approx. 770 px, mean nodes expanded approx. 583.
 
-These values indicate PPO delivers shorter average paths in the sampled scenes, albeit with ~6 % failure rate (likely due to tight corridors). A* retains perfect success albeit with higher computational cost (nodes expanded). This trade-off should be discussed alongside plots and tensorboard curves to contextualise RL vs. classical methods.
+These values indicate PPO delivers shorter average paths in the sampled scenes, albeit with ~6 % failure rate (likely due to tight corridors). A* retains perfect success albeit with higher computational cost (nodes expanded). This trade-off should be discussed alongside plots and tensorboard curves to contextualise RL vs. classical methods.
 
 ## 6.7 Deliverables for Thesis
 - Figures: comparison bar chart(s), TensorBoard convergence screenshot(s), optional trajectory snapshots.

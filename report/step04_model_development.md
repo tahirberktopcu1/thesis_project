@@ -1,6 +1,6 @@
-# Step 4 – RL Model Development
+# Step 4 - RL Model Development
 
-This step corresponds to “Implement DQN or PPO using Stable-Baselines3 or PyTorch. Train the model over multiple episodes until convergence.” We selected PPO with Stable-Baselines3 for its stability in discrete action spaces with complex reward shaping.
+This step corresponds to "Implement DQN or PPO using Stable-Baselines3 or PyTorch. Train the model over multiple episodes until convergence." We selected PPO with Stable-Baselines3 for its stability in discrete action spaces with complex reward shaping.
 
 ## 4.1 Algorithm Choice
 - **PPO (Proximal Policy Optimization):** Provides clipped policy updates, robust convergence, and native support in Stable-Baselines3.
@@ -17,8 +17,8 @@ This step corresponds to “Implement DQN or PPO using Stable-Baselines3 or PyTo
 - Rollout length `n_steps = 4096`.
 - Batch size `1024`.
 - Learning rate `3e-4` with default Adam optimiser.
-- Discount factor `γ = 0.99`.
-- Generalised Advantage Estimation `λ = 0.95`.
+- Discount factor `gamma = 0.99`.
+- Generalised Advantage Estimation `lambda = 0.95`.
 - Clipping parameter `0.2`.
 - Entropy coefficient `0.01` to encourage exploration.
 - Total timesteps (default 200k, recommended 500k for complex maps).
@@ -35,4 +35,4 @@ This step corresponds to “Implement DQN or PPO using Stable-Baselines3 or PyTo
 - `models/` stores final and best-performing checkpoints.
 - `requirements.txt` lists package versions (Gymnasium, SB3, PyTorch, Matplotlib, Pandas).
 
-With Step 4 completed, the PPO agent is trained and ready for comparative evaluation against classical planners.***
+With Step 4 completed, the PPO agent is trained and ready for comparative evaluation against classical planners.***

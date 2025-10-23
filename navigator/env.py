@@ -26,7 +26,7 @@ class LinearNavigatorEnv(gym.Env):
         self.config = config or NavigatorConfig()
         self.render_mode = render_mode
 
-        self.action_space = spaces.Discrete(3)  # forward, turn left, turn right
+        self.action_space = spaces.Discrete(3)
         self._static_obstacles: Tuple[RectangleObstacle, ...] = self.config.resolved_obstacles()
         self._obstacles: Tuple[RectangleObstacle, ...] = self._static_obstacles
         self._sensor_count = len(self.config.sensor_angles)
@@ -86,16 +86,16 @@ class LinearNavigatorEnv(gym.Env):
         return observation, info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        assert self.action_space.contains(action), f"{action} gecersiz eylem"
+        assert self.action_space.contains(action), f"{action} is not a valid action"
         prev_distance = self._distance_to_goal()
 
         collision = False
         collision_type: Optional[str] = None
-        if action == 0:  # move forward
+        if action == 0:
             collision, collision_type = self._move_forward()
-        elif action == 1:  # turn left
+        elif action == 1:
             self.agent_angle += self.config.turn_speed
-        elif action == 2:  # turn right
+        elif action == 2:
             self.agent_angle -= self.config.turn_speed
 
         self.agent_angle = self._wrap_angle(self.agent_angle)
@@ -235,14 +235,12 @@ class LinearNavigatorEnv(gym.Env):
             self._renderer = None
         super().close()
 
-    # --- Internal helpers -------------------------------------------------
-
     def _ensure_renderer(self) -> None:
         if self.render_mode is None:
             return
         if self._renderer is None:
             if self.render_mode not in self.metadata["render_modes"]:
-                raise ValueError(f"Bilinmeyen render_mode: {self.render_mode}")
+                raise ValueError(f"Unknown render_mode: {self.render_mode}")
             self._renderer = NavigatorRenderer(
                 width=self.config.map_width,
                 height=self.config.map_height,

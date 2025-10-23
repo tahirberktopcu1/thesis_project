@@ -67,7 +67,7 @@ def main() -> None:
     plt.plot(steps, values_smoothed, label=f"SMA (window={args.smooth})", linewidth=2)
     plt.xlabel("Timesteps")
     plt.ylabel(args.tag)
-    plt.title(f"Training Curve – {args.tag}")
+    plt.title(f"Training Curve - {args.tag}")
     plt.legend()
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
